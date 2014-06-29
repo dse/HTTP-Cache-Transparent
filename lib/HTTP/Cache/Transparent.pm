@@ -528,7 +528,7 @@ L<http://www.holmlund.se/mattias/>
 =head1 GIT REPOSITORY
 
 A git repository containing the source for this module can be found
-via http://git.holmlund.se/
+via https://github.com/mattiash/HTTP-Cache-Transparent
 
 =head1 COPYRIGHT AND LICENSE
 
