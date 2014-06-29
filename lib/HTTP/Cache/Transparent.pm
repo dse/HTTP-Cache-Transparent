@@ -257,15 +257,6 @@ sub _simple_request_cache {
 								( ($noupdate + $noupdatemtimefudgefactor) >
 								  ($time - $meta->{'X-HCT-LastModified'} ) ) );
     
-    if ($noupdate && $noupdateusemtime) {
-      print STDERR "\n";
-      printf STDERR ("  noupdateusemtime: time                    = %d\n", $time);
-      printf STDERR ("                  : last updated            = %d\n", $meta->{'X-HCT-LastUpdated'} // 0);
-      printf STDERR ("                  : last modified           = %d\n", $meta->{'X-HCT-LastModified'} // 0);
-      printf STDERR ("                  : noupdate by requesttime = %d\n", $noupdate_by_requesttime ? 1 : 0);
-      printf STDERR ("               >>>: noupdate by mtime       = %d\n", $noupdate_by_mtime ? 1 : 0);
-    }
-    
     if ($noupdate && ((!$noupdateusemtime && $noupdate_by_requesttime) ||
 		      ($noupdateusemtime  && $noupdate_by_mtime))) {
       print STDERR " from cache without checking with server.\n"
