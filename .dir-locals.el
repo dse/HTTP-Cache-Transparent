@@ -1,0 +1,11 @@
+;; -*- emacs-lisp -*-
+((perl-mode . ((perl-continued-brace-offset     . -2)
+	       (perl-continued-statement-offset .  2)
+	       (perl-indent-level               .  2)
+	       (perl-label-offset               . -2)
+	       (indent-tabs-mode                .  t)))
+ (cperl-mode . ((cperl-comment-column             . 32)
+		(cperl-continued-statement-offset .  2)
+		(cperl-indent-level               .  2)
+		(cperl-label-offset               .  2)
+		(indent-tabs-mode                 .  t))))
