@@ -47,6 +47,7 @@ LWP::Request methods) should be used as usual.
 use Carp;
 use LWP::UserAgent;
 use HTTP::Status qw/RC_NOT_MODIFIED RC_OK RC_PARTIAL_CONTENT status_message/;
+use HTTP::Date qw/str2time/;
 
 use Digest::MD5 qw/md5_hex/;
 use IO::File;
@@ -58,12 +59,14 @@ use Cwd;
 # cache-entry and recreate when we return a cached response.
 my @cache_headers = qw/Content-Type Content-Encoding
                        Content-Length Content-Range 
-                       Last-Modified/;
+                       Last-Modified Date/;
 
 my $basepath;
 my $maxage;
 my $verbose;
 my $noupdate;
+my $noupdateusemtime;
+my $noupdatemtimefudgefactor;
 my $approvecontent;
 
 my $org_simple_request;
@@ -93,6 +96,16 @@ hashref containing named arguments to the object.
     # contacting the server.
     # Default is 0.
     NoUpdate  => 15*60,
+
+    # If a resource is known to be updated every N seconds, and you
+    # want to be able to fetch it as soon as the next version of it is
+    # expected to be available instead of being forced to wait N
+    # seconds after your recent cache request, set this flag.
+    # Default is 0.
+    NoUpdateUseMtime => 1,
+
+    # Default is 2 seconds.
+    NoUpdateMtimeFudgeFactor => 3,
 
     # When a url has been downloaded and the response indicates that
     # has been modified compared to the content in the cache, 
@@ -133,6 +146,10 @@ sub init {
   $maxage = $arg->{MaxAge} || 8*24; 
   $verbose = $arg->{Verbose} || 0;
   $noupdate = $arg->{NoUpdate} || 0;
+  $noupdateusemtime = defined( $arg->{NoUpdateUseMtime} )
+    ? $arg->{NoUpdateUseMtime} : 0;
+  $noupdatemtimefudgefactor = defined( $arg->{NoUpdateMtimeFudgeFactor} )
+    ? $arg->{NoUpdateMtimeFudgeFactor} : 2;
   $approvecontent = $arg->{ApproveContent} || sub { return 1; };
 
   # Make sure that LWP::Simple does not use its simplified
@@ -233,8 +250,24 @@ sub _simple_request_cache {
       }
     }
 
-    if( defined( $meta->{'X-HCT-LastUpdated'} ) and
-        $noupdate > (time - $meta->{'X-HCT-LastUpdated'} ) ) {
+    my $time = time;
+    my $noupdate_by_requesttime = $noupdate && !$noupdateusemtime && ( defined( $meta->{'X-HCT-LastUpdated'} ) and
+								       $noupdate > ($time - $meta->{'X-HCT-LastUpdated'} ) );
+    my $noupdate_by_mtime = $noupdate && $noupdateusemtime && ( defined( $meta->{'X-HCT-LastModified'} ) and
+								( ($noupdate + $noupdatemtimefudgefactor) >
+								  ($time - $meta->{'X-HCT-LastModified'} ) ) );
+    
+    if ($noupdate && $noupdateusemtime) {
+      print STDERR "\n";
+      printf STDERR ("  noupdateusemtime: time                    = %d\n", $time);
+      printf STDERR ("                  : last updated            = %d\n", $meta->{'X-HCT-LastUpdated'} // 0);
+      printf STDERR ("                  : last modified           = %d\n", $meta->{'X-HCT-LastModified'} // 0);
+      printf STDERR ("                  : noupdate by requesttime = %d\n", $noupdate_by_requesttime ? 1 : 0);
+      printf STDERR ("               >>>: noupdate by mtime       = %d\n", $noupdate_by_mtime ? 1 : 0);
+    }
+    
+    if ($noupdate && ((!$noupdateusemtime && $noupdate_by_requesttime) ||
+		      ($noupdateusemtime  && $noupdate_by_mtime))) {
       print STDERR " from cache without checking with server.\n"
         if $verbose;
 
@@ -394,11 +427,31 @@ sub _write_cache_entry {
   my $content = $res->content;
   $content = "" if not defined $content;
 
+  my $client_time = time;
+
   $meta->{MD5} = md5_hex( $content );
   $meta->{Range} = $req->header('Range')
     if defined( $req->header('Range') );
   $meta->{Code} = $res->code;
-  $meta->{'X-HCT-LastUpdated'} = time;
+  $meta->{'X-HCT-LastUpdated'} = $client_time;
+
+  # for NoUpdateUseMtime
+  my $server_time_str = $res->header('Date');
+  my $server_last_modified_str = $res->header('Last-Modified');
+  if (defined $server_time_str && $server_time_str &&
+      defined $server_last_modified_str && $server_last_modified_str) {
+    my $server_time = str2time($server_time_str);
+    my $server_last_modified = str2time($server_last_modified_str);
+    if (defined $server_time && $server_time &&
+	defined $server_last_modified && $server_last_modified) {
+      my $server_drift = $server_time - $client_time;
+      # ^^^ $server_drift will be the number of seconds server time
+      # is AHEAD of client time.  We update our copy of the resource
+      # based on what the last modified time would be on the client.
+      my $client_last_modified = $server_last_modified - $server_drift;
+      $meta->{'X-HCT-LastModified'} = $client_last_modified;
+    }
+  }
 
   foreach my $h (@cache_headers) {
     $meta->{$h} = $res->header( $h )
