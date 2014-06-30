@@ -101,9 +101,19 @@ hashref containing named arguments to the object.
     # want to be able to fetch it as soon as the next version of it is
     # expected to be available instead of being forced to wait N
     # seconds after your recent cache request, set this flag.
+    #
+    # NOTE: EXERCISE CAUTION WHEN USING THIS OPTION.  CONSIDER ONLY
+    # USING IT ON A SMALL SCALE.  If a lot of clients use this
+    # approach against a server, then they would all hit the server at
+    # the time that the data feed is supposed to have been
+    # updated. This could cause a spike in server load that the server
+    # owner may want to avoid. However, on a small scale it might
+    # work.
+    #
     # Default is 0.
     NoUpdateImpatient => 1,
 
+    # Extra time to give the server to update their resource.
     # Default is 2 seconds.
     NoUpdateImpatientFudgeFactor => 3,
 
