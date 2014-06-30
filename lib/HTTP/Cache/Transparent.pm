@@ -103,9 +103,9 @@ hashref containing named arguments to the object.
     # seconds after your recent cache request, set this flag.
     #
     # NOTE: EXERCISE CAUTION WHEN USING THIS OPTION.  CONSIDER ONLY
-    # USING IT ON A SMALL SCALE.  If a lot of clients use this
-    # approach against a server, then they would all hit the server at
-    # the time that the data feed is supposed to have been
+    # USING IT ON A SMALL SCALE.  BE RESPONSIBLE.  If a lot of clients
+    # use this approach against a server, then they would all hit the
+    # server at the time that the data feed is supposed to have been
     # updated. This could cause a spike in server load that the server
     # owner may want to avoid. However, on a small scale it might
     # work.
