@@ -65,8 +65,8 @@ my $basepath;
 my $maxage;
 my $verbose;
 my $noupdate;
-my $noupdateusemtime;
-my $noupdatemtimefudgefactor;
+my $noupdateimpatient;
+my $noupdateimpatientfudgefactor;
 my $approvecontent;
 
 my $org_simple_request;
@@ -102,10 +102,10 @@ hashref containing named arguments to the object.
     # expected to be available instead of being forced to wait N
     # seconds after your recent cache request, set this flag.
     # Default is 0.
-    NoUpdateUseMtime => 1,
+    NoUpdateImpatient => 1,
 
     # Default is 2 seconds.
-    NoUpdateMtimeFudgeFactor => 3,
+    NoUpdateImpatientFudgeFactor => 3,
 
     # When a url has been downloaded and the response indicates that
     # has been modified compared to the content in the cache, 
@@ -146,10 +146,10 @@ sub init {
   $maxage = $arg->{MaxAge} || 8*24; 
   $verbose = $arg->{Verbose} || 0;
   $noupdate = $arg->{NoUpdate} || 0;
-  $noupdateusemtime = defined( $arg->{NoUpdateUseMtime} )
-    ? $arg->{NoUpdateUseMtime} : 0;
-  $noupdatemtimefudgefactor = defined( $arg->{NoUpdateMtimeFudgeFactor} )
-    ? $arg->{NoUpdateMtimeFudgeFactor} : 2;
+  $noupdateimpatient = defined( $arg->{NoUpdateImpatient} )
+    ? $arg->{NoUpdateImpatient} : 0;
+  $noupdateimpatientfudgefactor = defined( $arg->{NoUpdateImpatientFudgeFactor} )
+    ? $arg->{NoUpdateImpatientFudgeFactor} : 2;
   $approvecontent = $arg->{ApproveContent} || sub { return 1; };
 
   # Make sure that LWP::Simple does not use its simplified
@@ -251,14 +251,23 @@ sub _simple_request_cache {
     }
 
     my $time = time;
-    my $noupdate_by_requesttime = $noupdate && !$noupdateusemtime && ( defined( $meta->{'X-HCT-LastUpdated'} ) and
-								       $noupdate > ($time - $meta->{'X-HCT-LastUpdated'} ) );
-    my $noupdate_by_mtime = $noupdate && $noupdateusemtime && ( defined( $meta->{'X-HCT-LastModified'} ) and
-								( ($noupdate + $noupdatemtimefudgefactor) >
-								  ($time - $meta->{'X-HCT-LastModified'} ) ) );
+    my $dont_update = 0;
+    if ($noupdate) {
+      if ($noupdateimpatient) {
+	if (defined $meta->{'X-HCT-LastModified'}) {
+	  $dont_update = ($noupdate + $noupdateimpatientfudgefactor) > ($time - $meta->{'X-HCT-LastModified'});
+	} elsif (defined $meta->{'X-HCT-LastUpdated'}) {
+	  $dont_update = $noupdate > ($time - $meta->{'X-HCT-LastUpdated'});
+	}
+      }
+      else {
+	if (defined $meta->{'X-HCT-LastUpdated'}) {
+	  $dont_update = $noupdate > ($time - $meta->{'X-HCT-LastUpdated'});
+	}
+      }
+    }
     
-    if ($noupdate && ((!$noupdateusemtime && $noupdate_by_requesttime) ||
-		      ($noupdateusemtime  && $noupdate_by_mtime))) {
+    if ($dont_update) {
       print STDERR " from cache without checking with server.\n"
         if $verbose;
 
@@ -426,7 +435,8 @@ sub _write_cache_entry {
   $meta->{Code} = $res->code;
   $meta->{'X-HCT-LastUpdated'} = $client_time;
 
-  # for NoUpdateUseMtime
+  # for NoUpdateImpatient (we set these headers whether
+  # NoUpdateImpatient is set or not, in case we turn it on later on.)
   my $server_time_str = $res->header('Date');
   my $server_last_modified_str = $res->header('Last-Modified');
   if (defined $server_time_str && $server_time_str &&
