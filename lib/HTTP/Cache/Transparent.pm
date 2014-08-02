@@ -113,8 +113,12 @@ hashref containing named arguments to the object.
     # Default is 0.
     NoUpdateImpatient => 1,
 
-    # Extra time to give the server to update their resource.
-    # Default is 2 seconds.
+    # Extra time to give the server to update their resource.  You may
+    # specify an integer here to specify a fixed amount of time, or an
+    # arrayref of two integers [A, B] to specify a randomly selected
+    # integer amount of time between A and B seconds inclusive.
+    #
+    # Default is [2, 7].
     NoUpdateImpatientFudgeFactor => 3,
 
     # When a url has been downloaded and the response indicates that
@@ -159,7 +163,7 @@ sub init {
   $noupdateimpatient = defined( $arg->{NoUpdateImpatient} )
     ? $arg->{NoUpdateImpatient} : 0;
   $noupdateimpatientfudgefactor = defined( $arg->{NoUpdateImpatientFudgeFactor} )
-    ? $arg->{NoUpdateImpatientFudgeFactor} : 2;
+    ? $arg->{NoUpdateImpatientFudgeFactor} : [2, 7];
   $approvecontent = $arg->{ApproveContent} || sub { return 1; };
 
   # Make sure that LWP::Simple does not use its simplified
@@ -265,7 +269,14 @@ sub _simple_request_cache {
     if ($noupdate) {
       if ($noupdateimpatient) {
 	if (defined $meta->{'X-HCT-LastModified'}) {
-	  $dont_update = ($noupdate + $noupdateimpatientfudgefactor) > ($time - $meta->{'X-HCT-LastModified'});
+	  my $fudge = $noupdateimpatientfudgefactor;
+	  my $rand = $meta->{'X-HCT-Random'} || 0;
+	  if (ref($fudge) eq "ARRAY") {
+	    my $min = $fudge->[0];
+	    my $max = $fudge->[1];
+	    $fudge = $min + int($rand * ($max + 1 - $min));
+	  }
+	  $dont_update = ($noupdate + $fudge) > ($time - $meta->{'X-HCT-LastModified'});
 	} elsif (defined $meta->{'X-HCT-LastUpdated'}) {
 	  $dont_update = $noupdate > ($time - $meta->{'X-HCT-LastUpdated'});
 	}
@@ -461,6 +472,7 @@ sub _write_cache_entry {
       # based on what the last modified time would be on the client.
       my $client_last_modified = $server_last_modified - $server_drift;
       $meta->{'X-HCT-LastModified'} = $client_last_modified;
+      $meta->{'X-HCT-Random'} = rand();
     }
   }
 
