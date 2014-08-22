@@ -68,6 +68,7 @@ my $noupdate;
 my $noupdateimpatient;
 my $noupdateimpatientfudgefactor;
 my $approvecontent;
+my $usecacheontimeout;
 
 my $org_simple_request;
 
@@ -130,6 +131,8 @@ hashref containing named arguments to the object.
     # This mechanism can be used to work around servers that return errors
     # intermittently. The default is to accept all responses.
     ApproveContent => sub { return $_[0]->is_success },
+
+    UseCacheOnTimeout => 1,
  } );
 
 The directory where the cache is stored must be writable. It must also only
@@ -165,6 +168,7 @@ sub init {
   $noupdateimpatientfudgefactor = defined( $arg->{NoUpdateImpatientFudgeFactor} )
     ? $arg->{NoUpdateImpatientFudgeFactor} : [2, 7];
   $approvecontent = $arg->{ApproveContent} || sub { return 1; };
+  $usecacheontimeout = $arg->{UseCacheOnTimeout} || 0;
 
   # Make sure that LWP::Simple does not use its simplified
   # get-method that bypasses LWP::UserAgent. 
@@ -303,7 +307,11 @@ sub _simple_request_cache {
 
     $res = &$org_simple_request( $self, $r );
 
-    if( $res->code == RC_NOT_MODIFIED ) {
+    if( $usecacheontimeout && $res->status_line =~ m{^500 Can't connect to }) {
+      goto cache;
+    }
+    elsif( $res->code == RC_NOT_MODIFIED ) {
+	cache:
       print STDERR " from cache.\n" 
         if( $verbose );
 
