@@ -625,11 +625,4 @@ at your option, any later version of Perl 5 you may have available.
 
 =cut
 
-BEGIN {
-  my %me = (dse => 1, dembry => 1);
-  if ($me{$ENV{USER}} || $me{$ENV{LOGNAME}}) {
-    warn("This version of HTTP::Cache::Transparent has Honey Badger Superpowers!\n");
-  }
-}
-
 1;
